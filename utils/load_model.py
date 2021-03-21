@@ -26,7 +26,7 @@ def load_model(cfg="models/yolov4l-mish.yaml", weights="weights/yolov4l-mish.pt"
         for si, pred in enumerate(output):
             clip_coords(pred, (height, width))
             box = pred[:, :4].clone()  # xyxy
-            scale_coords([3, height, width], box, height, width)  # to original shape
+            #scale_coords([3, height, width], box, height, width)  # to original shape
             box = xyxy2xywh(box)  # xywh
             box[:, :2] -= box[:, 2:] / 2  # xy center to top-left corner
             for p, b in zip(pred.tolist(), box.tolist()):
