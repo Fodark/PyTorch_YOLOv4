@@ -1,7 +1,7 @@
 # This file contains modules common to various models
 
 
-from utils.utils import *
+from ..utils.utils import *
 
 try:
     from mish_cuda import MishCuda as Mish

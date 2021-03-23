@@ -5,9 +5,10 @@ Usage:
 """
 
 import argparse
+import torch
 
-from models.common import *
-from utils import google_utils
+from .common import *
+from ..utils import google_utils
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

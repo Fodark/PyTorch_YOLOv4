@@ -1,7 +1,8 @@
 # This file contains experimental modules
-
-from models.common import *
-from utils import google_utils
+import torch
+import torch.nn as nn
+from .common import *
+from ..utils import google_utils
 
 
 class CrossConv(nn.Module):
