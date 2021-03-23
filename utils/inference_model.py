@@ -1,6 +1,6 @@
 import torch
-from models.yolo import Model
-from utils.utils import (
+from .models.yolo import Model
+from .utils.utils import (
     coco80_to_coco91_class, check_file, check_img_size, compute_loss, non_max_suppression,
     scale_coords, xyxy2xywh, clip_coords, plot_images, xywh2xyxy, box_iou, output_to_target, ap_per_class)
 
@@ -19,7 +19,9 @@ class YoloMish:
         self.model.load_state_dict(ckpt['model'], strict=False)
         print('Transferred %g/%g items from %s' % (len(ckpt['model']), len(self.model.state_dict()), weights))
 
-    def new_predict(self, data):
+    def new_detect(self, data):
+        data = torch.tensor(data)
+        data = data.unsqueeze(0)
         self.model.eval()
         nb, _, height, width = data.shape  # batch size, channels, height, width
         inf_out, train_out = self.model(data)
@@ -28,7 +30,9 @@ class YoloMish:
         bboxes = []
         confidences = []
         class_ids = []
-        for *bbox, conf, class_id in output[0].tolist():
+        clip_coords(output[0], (height, width))
+        for pred in output[0]:
+            *bbox, conf, class_id = pred.tolist()
             bboxes.append([round(b, 3) for b in bbox])
             confidences.extend([round(conf, 5)])
             class_ids.extend([int(class_id)])
