@@ -1,16 +1,15 @@
-# COCO 2017 dataset http://cocodataset.org
-# Download command: bash ./get_coco2017.sh
-# Train command: python train.py --data ./data/coco.yaml
-# Dataset should be placed next to code folder:
+# COCO 2017 dataset http://cocodataset.org - first 128 training images
+# Download command:  python -c "from yolov5.utils.google_utils import gdrive_download; gdrive_download('1n_oKgR81BJtqk75b00eAjdv03qVCQn2f','coco128.zip')"
+# Train command: python train.py --data ./data/coco128.yaml
+# Dataset should be placed next to yolov5 folder:
 #   /parent_folder
-#     /coco
-#     /code
+#     /coco128
+#     /yolov5
 
 
 # train and val datasets (image directory or *.txt file with image paths)
-train: ../coco/train2017.txt  # 118k images
-val: ../coco/val2017.txt  # 5k images
-test: ../coco/testdev2017.txt  # 20k images for submission to https://competitions.codalab.org/competitions/20794
+train: ../coco128/images/train2017/
+val: ../coco128/images/train2017/
 
 # number of classes
 nc: 80

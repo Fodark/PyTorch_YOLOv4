@@ -1,31 +1,8 @@
 import argparse
-import glob
 import json
-import os
-import shutil
-from pathlib import Path
 
-import numpy as np
-import torch
-import yaml
-from tqdm import tqdm
-
-from models.experimental import attempt_load
-from utils.datasets import create_dataloader
-from utils.general import (
-    coco80_to_coco91_class, check_file, check_img_size, compute_loss, non_max_suppression,
-    scale_coords, xyxy2xywh, clip_coords, plot_images, xywh2xyxy, box_iou, output_to_target, ap_per_class)
-from utils.torch_utils import select_device, time_synchronized
-
-from models.models import *
-#from utils.datasets import *
-
-def load_classes(path):
-    # Loads *.names file at 'path'
-    with open(path, 'r') as f:
-        names = f.read().split('\n')
-    return list(filter(None, names))  # filter removes empty strings (such as last line)
-
+from models.experimental import *
+from utils.datasets import *
 
 
 def test(data,
@@ -49,7 +26,7 @@ def test(data,
         device = next(model.parameters()).device  # get model device
 
     else:  # called directly
-        device = select_device(opt.device, batch_size=batch_size)
+        device = torch_utils.select_device(opt.device, batch_size=batch_size)
         merge, save_txt = opt.merge, opt.save_txt  # use Merge NMS, save *.txt labels
         if save_txt:
             out = Path('inference/output')
@@ -62,16 +39,12 @@ def test(data,
             os.remove(f)
 
         # Load model
-        model = Darknet(opt.cfg).to(device)
+        model = attempt_load(weights, map_location=device)  # load FP32 model
+        imgsz = check_img_size(imgsz, s=model.stride.max())  # check img_size
 
-        # load model
-        try:
-            ckpt = torch.load(weights[0], map_location=device)  # load checkpoint
-            ckpt['model'] = {k: v for k, v in ckpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
-            model.load_state_dict(ckpt['model'], strict=False)
-        except:
-            load_darknet_weights(model, weights[0])
-        imgsz = check_img_size(imgsz, s=32)  # check img_size
+        # Multi-GPU disabled, incompatible with .half() https://github.com/ultralytics/yolov5/issues/99
+        # if device.type != 'cpu' and torch.cuda.device_count() > 1:
+        #     model = nn.DataParallel(model)
 
     # Half
     half = device.type != 'cpu'  # half precision only supported on CUDA
@@ -91,14 +64,11 @@ def test(data,
         img = torch.zeros((1, 3, imgsz, imgsz), device=device)  # init img
         _ = model(img.half() if half else img) if device.type != 'cpu' else None  # run once
         path = data['test'] if opt.task == 'test' else data['val']  # path to val/test images
-        dataloader = create_dataloader(path, imgsz, batch_size, 32, opt,
+        dataloader = create_dataloader(path, imgsz, batch_size, model.stride.max(), opt,
                                        hyp=None, augment=False, cache=False, pad=0.5, rect=True)[0]
 
     seen = 0
-    try:
-        names = model.names if hasattr(model, 'names') else model.module.names
-    except:
-        names = load_classes(opt.names)
+    names = model.names if hasattr(model, 'names') else model.module.names
     coco91class = coco80_to_coco91_class()
     s = ('%20s' + '%12s' * 6) % ('Class', 'Images', 'Targets', 'P', 'R', 'mAP@.5', 'mAP@.5:.95')
     p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
@@ -115,18 +85,18 @@ def test(data,
         # Disable gradients
         with torch.no_grad():
             # Run model
-            t = time_synchronized()
+            t = torch_utils.time_synchronized()
             inf_out, train_out = model(img, augment=augment)  # inference and training outputs
-            t0 += time_synchronized() - t
+            t0 += torch_utils.time_synchronized() - t
 
             # Compute loss
             if training:  # if model has loss hyperparameters
                 loss += compute_loss([x.float() for x in train_out], targets, model)[1][:3]  # GIoU, obj, cls
 
             # Run NMS
-            t = time_synchronized()
+            t = torch_utils.time_synchronized()
             output = non_max_suppression(inf_out, conf_thres=conf_thres, iou_thres=iou_thres, merge=merge)
-            t1 += time_synchronized() - t
+            t1 += torch_utils.time_synchronized() - t
 
         # Statistics per image
         for si, pred in enumerate(output):
@@ -178,8 +148,8 @@ def test(data,
 
                 # Per target class
                 for cls in torch.unique(tcls_tensor):
-                    ti = (cls == tcls_tensor).nonzero(as_tuple=False).view(-1)  # prediction indices
-                    pi = (cls == pred[:, 5]).nonzero(as_tuple=False).view(-1)  # target indices
+                    ti = (cls == tcls_tensor).nonzero().view(-1)  # prediction indices
+                    pi = (cls == pred[:, 5]).nonzero().view(-1)  # target indices
 
                     # Search for detections
                     if pi.shape[0]:
@@ -187,7 +157,7 @@ def test(data,
                         ious, i = box_iou(pred[pi, :4], tbox[ti]).max(1)  # best ious, indices
 
                         # Append detections
-                        for j in (ious > iouv[0]).nonzero(as_tuple=False):
+                        for j in (ious > iouv[0]).nonzero():
                             d = ti[i[j]]  # detected target
                             if d not in detected:
                                 detected.append(d)
@@ -263,7 +233,7 @@ def test(data,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='test.py')
-    parser.add_argument('--weights', nargs='+', type=str, default='yolov4.pt', help='model.pt path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default='yolov4l-mish.pt', help='model.pt path(s)')
     parser.add_argument('--data', type=str, default='data/coco128.yaml', help='*.data path')
     parser.add_argument('--batch-size', type=int, default=32, help='size of each image batch')
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
@@ -277,8 +247,6 @@ if __name__ == '__main__':
     parser.add_argument('--merge', action='store_true', help='use Merge NMS')
     parser.add_argument('--verbose', action='store_true', help='report mAP by class')
     parser.add_argument('--save-txt', action='store_true', help='save results to *.txt')
-    parser.add_argument('--cfg', type=str, default='cfg/yolov4.cfg', help='*.cfg path')
-    parser.add_argument('--names', type=str, default='data/coco.names', help='*.cfg path')
     opt = parser.parse_args()
     opt.save_json |= opt.data.endswith('coco.yaml')
     opt.data = check_file(opt.data)  # check file
@@ -297,14 +265,14 @@ if __name__ == '__main__':
              opt.verbose)
 
     elif opt.task == 'study':  # run over a range of settings and save/plot
-        for weights in ['']:
+        for weights in ['yolov4s-mish.pt', 'yolov4m-mish.pt', 'yolov4l-mish.pt', 'yolov4x-mish.pt']:
             f = 'study_%s_%s.txt' % (Path(opt.data).stem, Path(weights).stem)  # filename to save to
-            x = list(range(352, 832, 64))  # x axis
+            x = list(range(288, 896, 64))  # x axis
             y = []  # y axis
             for i in x:  # img-size
                 print('\nRunning %s point %s...' % (f, i))
                 r, _, t = test(opt.data, weights, opt.batch_size, i, opt.conf_thres, opt.iou_thres, opt.save_json)
                 y.append(r + t)  # results and times
-            np.savetxt(f, y, fmt='%10.4g')  # save
+            np.savetxt(f, y, fmt='%10.6g')  # save
         os.system('zip -r study.zip study_*.txt')
         # plot_study_txt(f, x)  # plot

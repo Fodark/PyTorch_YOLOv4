@@ -1,12 +1,17 @@
+"""Exports a pytorch *.pt model to ONNX and TorchScript formats
+
+Usage:
+    $ export PYTHONPATH="$PWD" && python models/export.py --weights ./weights/yolov5s.pt --img 640 --batch 1
+"""
+
 import argparse
 
-import torch
-
-from utils.google_utils import attempt_download
+from models.common import *
+from utils import google_utils
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', type=str, default='./yolov4.pt', help='weights path')
+    parser.add_argument('--weights', type=str, default='./yolov5s.pt', help='weights path')
     parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='image size')
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
     opt = parser.parse_args()
@@ -17,7 +22,7 @@ if __name__ == '__main__':
     img = torch.zeros((opt.batch_size, 3, *opt.img_size))  # image size(1,3,320,192) iDetection
 
     # Load PyTorch model
-    attempt_download(opt.weights)
+    google_utils.attempt_download(opt.weights)
     model = torch.load(opt.weights, map_location=torch.device('cpu'))['model'].float()
     model.eval()
     model.model[-1].export = True  # set Detect() layer export=True
