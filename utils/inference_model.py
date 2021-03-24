@@ -36,8 +36,9 @@ class YoloMish:
         output = output[0]
 
         boxes = output[:, :4].clone()
-        print('INF')
-        print(boxes)
+        
+        clip_coords(boxes, (height, width))
+        
         boxes[:, [0,2]] *= width / 640
         boxes[:, [1,3]] *= height / 640
         boxes[:, 2] = boxes[:, 2] - boxes[:, 0]
@@ -45,17 +46,16 @@ class YoloMish:
         print(boxes)
 
         #scale_coords((640, 640), boxes, (height, width))  # to original
-        #clip_coords(output, (height, width))
         #boxes = xyxy2xywh(boxes)  # xywh
         #boxes[:, :2] -= boxes[:, 2:] / 2  # xy center to top-left corner
 
-        bboxes = []
+        bboxes = boxes.tolist()
         confidences = []
         class_ids = []
         ##clip_coords(output[0], (height, width))
         for pred in output:
-            *bbox, conf, class_id = pred.tolist()
-            bboxes.append([round(b, 3) for b in bbox])
+            *tmp, conf, class_id = pred.tolist()
+            # bboxes.append([round(b, 3) for b in bbox])
             confidences.extend([round(conf, 5)])
             class_ids.extend([int(class_id)])
         
