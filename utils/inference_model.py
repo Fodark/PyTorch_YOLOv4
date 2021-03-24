@@ -36,14 +36,14 @@ class YoloMish:
         output = output[0]
 
         boxes = output[:, :4].clone()
-        
+
         clip_coords(boxes, (height, width))
         
         boxes[:, [0,2]] *= width / 640
         boxes[:, [1,3]] *= height / 640
         boxes[:, 2] = boxes[:, 2] - boxes[:, 0]
         boxes[:, 3] = boxes[:, 3] - boxes[:, 1]
-        print(boxes)
+        # print(boxes)
 
         #scale_coords((640, 640), boxes, (height, width))  # to original
         #boxes = xyxy2xywh(boxes)  # xywh
