@@ -23,7 +23,7 @@ class YoloMish:
         #ckpt['model'] = {k: v for k, v in ckpt['model'].float().state_dict().items()
         #                 if k in self.model.state_dict() and not any(x in k for x in exclude)
         #                 and self.model.state_dict()[k].shape == v.shape}
-        self.model.load_state_dict(torch.load(weights))
+        self.model.load_state_dict(torch.load(weights, map_location=self.device))
         print(f'Loaded {weights}')
 
     def new_detect(self, data):
